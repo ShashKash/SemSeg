@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 x = tf.random_normal([1, 572, 572, 1], mean=0, stddev=0.1)
+true_output = tf.random_normal([1, 388, 388, 2], mean=0, stddev=0.1)
 
 def conv_conv_pool(input, num_filters, filter_size, pool_size, block_nos):
     with tf.variable_scope(f"block{block_nos}", reuse=tf.AUTO_REUSE):
@@ -90,6 +91,29 @@ Conv15 = conv2d_layer(Conv14, num_filters=num_classes, filter_size=1, block_nos=
 
 ####################### UNet Architecture End #######################
 
+def cross_entropy(softmaxed_output, correct_output):
+    clip_low = 1e-10
+    clip_high = 1
+
+    pixelwise_out = tf.reshape(softmaxed_output, [-1, num_classes])
+    print(f"shape of pixelwise_out = {pixelwise_out.shape}")
+    pixelwise_cor = tf.reshape(correct_output, [-1, num_classes])
+    print(f"shape of pixelwise_out = {pixelwise_out.shape}")
+
+    return tf.reduce_mean(-tf.reduce_sum(pixelwise_cor * tf.log(tf.clip_by_value(pixelwise_out,clip_value_min=clip_low,clip_value_max=clip_high)), axis=1), name="cross_entropy")
+
+#def calculate_cost(output_layer, correct_map):
+
+def pixel_wise_softmax(output_map):
+    with tf.name_scope("pixel_wise_softmax"):
+        max_axis = tf.reduce_max(output_map, axis=3, keepdims=True)
+        exponential_map = tf.exp(output_map - max_axis)
+        normalize = tf.reduce_sum(exponential_map, axis=3, keepdims=True)
+        return exponential_map / normalize
+
+softmaxed = tf.nn.softmax(Conv15, axis=3)
+cost2 = cross_entropy(softmaxed, true_output)
+
 ##Test to check if the shapes are correct
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
@@ -100,5 +124,5 @@ with tf.Session() as sess:
     print(Conv15.shape, Conv5.shape)
     #print(sess.run([Conv5, Conv13]))
     print(tf.trainable_variables())
-    print(sess.run([x, Conv5, Conv15]))
+    print(sess.run([x, Conv5, Conv15, cost2]))
     print([x.shape, Conv5.shape, Conv15.shape])
