@@ -1,7 +1,15 @@
 import tensorflow as tf
+import numpy as np
 
-x = tf.random_normal([1, 572, 572, 1], mean=0, stddev=0.1)
-true_output = tf.random_normal([1, 388, 388, 2], mean=0, stddev=0.1)
+# x = tf.random_normal([1, 572, 572, 1], mean=0, stddev=0.1)
+# true_output = tf.random_normal([1, 388, 388, 2], mean=0, stddev=0.1)
+
+y_train = np.load('labels.npy')
+x_train = np.load('train_imgs.npy')
+
+for i in range(len(y_train)):
+    print(x_train[i].shape)
+    print(y_train[i].shape)
 
 
 def conv_conv_pool(input, num_filters, filter_size, pool_size, block_nos):
@@ -117,9 +125,14 @@ def conv2d_layer(input, num_filters, filter_size, block_nos):
 
 ####################### UNet Architecture Start #######################
 
-num_classes = 2
+num_classes = 22
 
-Conv1, Pool1 = conv_conv_pool(input=x, num_filters=64, filter_size=3, pool_size=2, block_nos=1)
+X = tf.placeholder(tf.float32, shape=(1, 572, 572, 1))
+y = tf.placeholder(tf.float32, shape=(1, 572, 572, 22))
+y_true = tf.slice(y, begin=[0, 92, 92, 0], size=[-1, 388, 388, -1])
+
+
+Conv1, Pool1 = conv_conv_pool(input=X, num_filters=64, filter_size=3, pool_size=2, block_nos=1)
 Conv2, Pool2 = conv_conv_pool(Pool1, 128, 3, 2, 2)
 Conv3, Pool3 = conv_conv_pool(Pool2, 256, 3, 2, 3)
 Conv4, Pool4 = conv_conv_pool(Pool3, 512, 3, 2, 4)
@@ -163,13 +176,24 @@ def pixel_wise_softmax(output_map):
         return exponential_map / normalize
 
 
-pixelwise_output = tf.reshape(Conv15, [-1, num_classes])
-pixelwise_correct = tf.reshape(true_output, [-1, num_classes])
-cost1 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
-    logits=pixelwise_output, labels=pixelwise_correct))
+def cost1(net_output, true_output):
+    pixelwise_output = tf.reshape(net_output, [-1, num_classes])
+    pixelwise_correct = tf.reshape(true_output, [-1, num_classes])
+    print(f"shape of pixelwise_output = {pixelwise_output.shape}")
+    print(f"shape of pixelwise_correct = {pixelwise_correct.shape}")
+    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
+        logits=pixelwise_output, labels=pixelwise_correct))
+    print(f"shape of cost1 = {cost.shape}")
+    return cost
 
-softmaxed = tf.nn.softmax(Conv15, axis=3)
-cost2 = cross_entropy(softmaxed, true_output)
+
+def cost2(net_output, true_output):
+    softmaxed = tf.nn.softmax(net_output, axis=3)
+    cost = cross_entropy(softmaxed, true_output)
+    print(f"shape of softmaxed = {softmaxed.shape}")
+    print(f"shape of cost2 = {cost.shape}")
+    return cost
+
 
 # Test to check if the shapes are correct
 with tf.Session() as sess:
@@ -178,12 +202,9 @@ with tf.Session() as sess:
     writer = tf.summary.FileWriter('/UNet/log/model_graph', sess.graph)
     writer.close()
 
-    print([x.shape, Conv5.shape, Conv15.shape])
+    print([X.shape, y_true.shape, Conv5.shape, Conv15.shape])
     print(tf.trainable_variables())
-    print(f"shape of pixelwise_output = {pixelwise_output.shape}")
-    print(f"shape of pixelwise_correct = {pixelwise_correct.shape}")
-    print(f"shape of cost1 = {cost1.shape}")
-    print(f"shape of softmaxed = {softmaxed.shape}")
-    print(f"shape of cost2 = {cost2.shape}")
-
-    print(sess.run([x, Conv5, Conv15, cost1, cost2]))
+    print(sess.run([X, y_true,
+                    Conv5, Conv15,
+                    cost1(Conv15, y_true), cost2(Conv15, y_true)],
+                   feed_dict={X: x_train[0], y: y_train[0]}))
