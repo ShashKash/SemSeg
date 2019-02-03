@@ -7,25 +7,27 @@ import numpy as np
 y_train = np.load('labels.npy')
 x_train = np.load('train_imgs.npy')
 
-for i in range(len(y_train)):
-    print(x_train[i].shape)
-    print(y_train[i].shape)
+# for i in range(len(y_train)):
+#     print(x_train[i].shape)
+#     print(y_train[i].shape)
+
+normal_initializer = tf.truncated_normal_initializer(mean=0, stddev=0.01)
+he_initializer = tf.initializers.he_normal()
 
 
-def conv_conv_pool(input, num_filters, filter_size, pool_size, block_nos):
+def conv_conv_pool(input, num_filters, filter_size, pool_size, init, block_nos):
 
     with tf.variable_scope(f"block{block_nos}", reuse=tf.AUTO_REUSE):
         W1 = tf.get_variable("w_conv1", [filter_size, filter_size,
                                          input.shape[3], num_filters],
-                             initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01))
+                             initializer=init)
         W2 = tf.get_variable("w_conv2", [filter_size, filter_size,
                                          num_filters, num_filters],
-                             initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01))
+                             initializer=init)
         b1 = tf.get_variable("bias1", [num_filters],
                              initializer=tf.constant_initializer(0.01))
         b2 = tf.get_variable("bias2", [num_filters],
                              initializer=tf.constant_initializer(0.01))
-
 
         conv_block = tf.nn.conv2d(input, filter=W1,
                                   strides=[1, 1, 1, 1], padding="VALID")
@@ -44,20 +46,19 @@ def conv_conv_pool(input, num_filters, filter_size, pool_size, block_nos):
     return conv_block, pooled_block
 
 
-def conv_upconv(input, num_filters, conv_filter_size, upconv_scale, block_nos):
+def conv_upconv(input, num_filters, conv_filter_size, upconv_scale, init, block_nos):
 
     with tf.variable_scope(f"block{block_nos}", reuse=tf.AUTO_REUSE):
         W_conv = tf.get_variable("w_conv",
                                  [conv_filter_size, conv_filter_size,
                                   input.shape[3], num_filters],
-                                 initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01))
+                                 initializer=init)
         W_upconv = tf.get_variable("w_upconv",
                                    [upconv_scale, upconv_scale,
                                     num_filters//2, num_filters],
-                                   initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01))
+                                   initializer=init)
         b1 = tf.get_variable("bias1", [num_filters],
                              initializer=tf.constant_initializer(0.01))
-
 
         conv_block = tf.nn.conv2d(input, filter=W_conv, strides=[1, 1, 1, 1], padding="VALID")
         conv_block = tf.nn.bias_add(conv_block, b1)
@@ -80,7 +81,7 @@ def conv_upconv(input, num_filters, conv_filter_size, upconv_scale, block_nos):
     return conv_block
 
 
-def concat_conv(prev_conved, upconved, num_filters, filter_size, block_nos):
+def concat_conv(prev_conved, upconved, num_filters, filter_size, init, block_nos):
 
     target_height = upconved.shape[2]
     target_width = upconved.shape[1]
@@ -96,7 +97,7 @@ def concat_conv(prev_conved, upconved, num_filters, filter_size, block_nos):
 
         W1 = tf.get_variable("w_conv", [filter_size, filter_size,
                                         concated.shape[3], num_filters],
-                             initializer=tf.truncated_normal_initializer(mean=0, stddev=0.01))
+                             initializer=init)
         b1 = tf.get_variable("bias", [num_filters], initializer=tf.constant_initializer(0.01))
 
         conv = tf.nn.conv2d(concated, W1, strides=[1, 1, 1, 1],
@@ -107,12 +108,12 @@ def concat_conv(prev_conved, upconved, num_filters, filter_size, block_nos):
     return conv
 
 
-def conv2d_layer(input, num_filters, filter_size, block_nos):
+def conv2d_layer(input, num_filters, filter_size, init, block_nos):
 
     with tf.variable_scope(f"block{block_nos}", reuse=tf.AUTO_REUSE):
         W = tf.get_variable("w_conv", [filter_size, filter_size,
                                        input.shape[3], num_filters],
-                            initializer=tf.truncated_normal_initializer(mean=0, stddev=0.1))
+                            initializer=init)
         b = tf.get_variable("bias", [num_filters], initializer=tf.constant_initializer(0.01))
 
         conv = tf.nn.conv2d(input, filter=W, strides=[1, 1, 1, 1],
@@ -132,21 +133,21 @@ y = tf.placeholder(tf.float32, shape=(1, 572, 572, 22))
 y_true = tf.slice(y, begin=[0, 92, 92, 0], size=[-1, 388, 388, -1])
 
 
-Conv1, Pool1 = conv_conv_pool(input=X, num_filters=64, filter_size=3, pool_size=2, block_nos=1)
-Conv2, Pool2 = conv_conv_pool(Pool1, 128, 3, 2, 2)
-Conv3, Pool3 = conv_conv_pool(Pool2, 256, 3, 2, 3)
-Conv4, Pool4 = conv_conv_pool(Pool3, 512, 3, 2, 4)
-Conv5 = conv2d_layer(input=Pool4, num_filters=1024, filter_size=3, block_nos=5)
-Conv6 = conv_upconv(input=Conv5, num_filters=1024, conv_filter_size=3, upconv_scale=2, block_nos=6)
-Conv7 = concat_conv(prev_conved=Conv4, upconved=Conv6, num_filters=512, filter_size=3, block_nos=7)
-Conv8 = conv_upconv(Conv7, 512, 3, 2, 8)
-Conv9 = concat_conv(Conv3, Conv8, 256, 3, 9)
-Conv10 = conv_upconv(Conv9, 256, 3, 2, 10)
-Conv11 = concat_conv(Conv2, Conv10, 128, 3, 11)
-Conv12 = conv_upconv(Conv11, 128, 3, 2, 12)
-Conv13 = concat_conv(Conv1, Conv12, 64, 3, 13)
-Conv14 = conv2d_layer(Conv13, 64, 3, 14)
-Conv15 = conv2d_layer(Conv14, num_filters=num_classes, filter_size=1, block_nos=15)
+Conv1, Pool1 = conv_conv_pool(input=X, num_filters=64, filter_size=3, pool_size=2, init=he_initializer, block_nos=1)
+Conv2, Pool2 = conv_conv_pool(Pool1, 128, 3, 2, he_initializer, 2)
+Conv3, Pool3 = conv_conv_pool(Pool2, 256, 3, 2, he_initializer, 3)
+Conv4, Pool4 = conv_conv_pool(Pool3, 512, 3, 2, he_initializer, 4)
+Conv5 = conv2d_layer(input=Pool4, num_filters=1024, filter_size=3, init=he_initializer, block_nos=5)
+Conv6 = conv_upconv(input=Conv5, num_filters=1024, conv_filter_size=3, upconv_scale=2, init=he_initializer, block_nos=6)
+Conv7 = concat_conv(prev_conved=Conv4, upconved=Conv6, num_filters=512, filter_size=3, init=he_initializer, block_nos=7)
+Conv8 = conv_upconv(Conv7, 512, 3, 2, he_initializer, 8)
+Conv9 = concat_conv(Conv3, Conv8, 256, 3, he_initializer, 9)
+Conv10 = conv_upconv(Conv9, 256, 3, 2, he_initializer, 10)
+Conv11 = concat_conv(Conv2, Conv10, 128, 3, he_initializer, 11)
+Conv12 = conv_upconv(Conv11, 128, 3, 2, he_initializer, 12)
+Conv13 = concat_conv(Conv1, Conv12, 64, 3, he_initializer, 13)
+Conv14 = conv2d_layer(Conv13, 64, 3, he_initializer, 14)
+Conv15 = conv2d_layer(Conv14, num_filters=num_classes, filter_size=1, init=he_initializer, block_nos=15)
 
 ####################### UNet Architecture End #######################
 
@@ -204,7 +205,15 @@ with tf.Session() as sess:
 
     print([X.shape, y_true.shape, Conv5.shape, Conv15.shape])
     print(tf.trainable_variables())
-    print(sess.run([X, y_true,
-                    Conv5, Conv15,
-                    cost1(Conv15, y_true), cost2(Conv15, y_true)],
-                   feed_dict={X: x_train[0], y: y_train[0]}))
+
+    # to check the initializer for the first image
+    # print(sess.run([X, y_true,
+    #                 Conv5, Conv15,
+    #                 cost1(Conv15, y_true), cost2(Conv15, y_true)],
+    #                 feed_dict={X: x_train[0], y: y_train[0]}))
+
+    for i in range(len(x_train)):
+        print(sess.run([X, y_true,
+                        Conv5, Conv15,
+                        cost1(Conv15, y_true), cost2(Conv15, y_true)],
+                       feed_dict={X: x_train[i], y: y_train[i]}))
