@@ -111,6 +111,10 @@ def pixel_wise_softmax(output_map):
         normalize = tf.reduce_sum(exponential_map, axis=3, keepdims=True)
         return exponential_map / normalize
 
+pixelwise_output = tf.reshape(Conv15, [-1, num_classes])
+pixelwise_correct = tf.reshape(true_output, [-1, num_classes])
+cost1 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=pixelwise_output, labels=pixelwise_correct))
+
 softmaxed = tf.nn.softmax(Conv15, axis=3)
 cost2 = cross_entropy(softmaxed, true_output)
 
@@ -121,8 +125,12 @@ with tf.Session() as sess:
     writer = tf.summary.FileWriter('/UNet/log/model_graph', sess.graph)
     writer.close()
 
-    print(Conv15.shape, Conv5.shape)
-    #print(sess.run([Conv5, Conv13]))
-    print(tf.trainable_variables())
-    print(sess.run([x, Conv5, Conv15, cost2]))
     print([x.shape, Conv5.shape, Conv15.shape])
+    print(tf.trainable_variables())
+    print(f"shape of pixelwise_output = {pixelwise_output.shape}")
+    print(f"shape of pixelwise_correct = {pixelwise_correct.shape}")
+    print(f"shape of cost1 = {cost1.shape}")
+    print(f"shape of softmaxed = {softmaxed.shape}")
+    print(f"shape of cost2 = {cost2.shape}")
+
+    print(sess.run([x, Conv5, Conv15, cost1, cost2]))
