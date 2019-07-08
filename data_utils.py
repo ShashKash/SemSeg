@@ -30,38 +30,6 @@ def save_image(name, image):
         plot.imsave(name, img, cmap='prism')
 
 
-# def batch_class_weights(batch, classes):
-#     instances = np.zeros((classes))
-#     class_weights = []
-#     for image in batch:
-#         for i in range(batch.shape[1]):
-#             for j in range(batch.shape[2]):
-#                 instances[image[i, j]] += 1
-#
-#     background_ratio = instances[0]/np.sum(instances)
-#     others_ratio = (1-background_ratio)/(classes-1)
-#     class_weights.append(background_ratio)
-#     for n in range(1, classes):
-#         class_weights.append(others_ratio)
-#     print(class_weights)
-#     return class_weights
-
-
-# def load_image(path, b_n_w=False):
-#     if b_n_w:
-#         img = np.array(Image.open(path).resize(256, 256))
-#     else:
-#         img = np.array(Image.open(path).convert('L').resize((256, 256)))
-#         b_n_w = True
-#
-#     if len(img.shape) == 2:
-#         img = np.expand_dims(img, axis=2)
-#         img = np.expand_dims(img, axis=0)
-#     elif len(img.shape) == 3:
-#         img = np.expand_dims(img, axis=0)
-#     return img
-
-
 def fetch_batch(batch_iter, batch_size, images_list, num_classes, num_channels, H=256, W=256):
     ip_imgs = [];labels = [];names = []
     instances = np.zeros((num_classes))
