@@ -23,10 +23,10 @@ def conv_conv_pool(input, num_filters, filter_size, pool_size, block_nos):
         b2 = tf.get_variable("bias2", [num_filters],
                              initializer=tf.constant_initializer(0.1))
 
-        tf.summary.histogram("weights1", W1)
-        tf.summary.histogram("weights2", W2)
-        tf.summary.histogram("biases1", b1)
-        tf.summary.histogram("biases2", b2)
+        # tf.summary.histogram("weights1", W1)
+        # tf.summary.histogram("weights2", W2)
+        # tf.summary.histogram("biases1", b1)
+        # tf.summary.histogram("biases2", b2)
 
         conv_block = tf.nn.conv2d(input, filter=W1,
                                   strides=[1, 1, 1, 1], padding="SAME")
@@ -41,10 +41,10 @@ def conv_conv_pool(input, num_filters, filter_size, pool_size, block_nos):
 
         print(conv_block.shape)
 
-        tf.summary.histogram("pre_relu", pre_relu)
+        # tf.summary.histogram("pre_relu", pre_relu)
 
         conv_block = tf.nn.relu(pre_relu)
-        tf.summary.histogram("activation", conv_block)
+        # tf.summary.histogram("activation", conv_block)
 
         pooled_block = tf.nn.max_pool(conv_block,
                                       ksize=[1, pool_size, pool_size, 1],
@@ -81,20 +81,20 @@ def conv_upconv(input, num_filters, conv_filter_size, upconv_scale, block_nos):
         b2 = tf.get_variable("bias2", [conv_block.shape[3]//2],
                              initializer=tf.constant_initializer(0.1))
 
-        tf.summary.histogram("weights", W_conv)
-        tf.summary.histogram("weights_upconv", W_upconv)
-        tf.summary.histogram("biases1", b1)
-        tf.summary.histogram("biases2", b2)
+        # tf.summary.histogram("weights", W_conv)
+        # tf.summary.histogram("weights_upconv", W_upconv)
+        # tf.summary.histogram("biases1", b1)
+        # tf.summary.histogram("biases2", b2)
 
         conv_block = tf.nn.conv2d_transpose(conv_block, W_upconv,
                                             output_shape,
                                             strides=[1, 2, 2, 1],
                                             padding="SAME")
         conv_block = tf.nn.bias_add(conv_block, b2)
-        tf.summary.histogram("pre_relu", conv_block)
+        # tf.summary.histogram("pre_relu", conv_block)
 
         conv_block = tf.nn.relu(conv_block)
-        tf.summary.histogram("activation", conv_block)
+        # tf.summary.histogram("activation", conv_block)
 
         print(conv_block.shape)
 
@@ -121,16 +121,16 @@ def concat_conv(prev_conved, upconved, num_filters, filter_size, block_nos):
                              initializer=weight_initializer(np.sqrt(2 / (filter_size ** 2 * num_filters))))
         b1 = tf.get_variable("bias", [num_filters], initializer=tf.constant_initializer(0.1))
 
-        tf.summary.histogram("weights", W1)
-        tf.summary.histogram("biases", b1)
+        # tf.summary.histogram("weights", W1)
+        # tf.summary.histogram("biases", b1)
 
         conv = tf.nn.conv2d(concated, W1, strides=[1, 1, 1, 1],
                             padding="SAME")
         pre_relu = tf.nn.bias_add(conv, b1)
-        tf.summary.histogram("pre_relu", pre_relu)
+        # tf.summary.histogram("pre_relu", pre_relu)
 
         conv = tf.nn.relu(pre_relu)
-        tf.summary.histogram("activation", conv)
+        # tf.summary.histogram("activation", conv)
 
         print(conv.shape)
 
@@ -145,13 +145,13 @@ def conv2d(input, num_filters, filter_size, block_nos, last_flag=False):
                             initializer=weight_initializer(np.sqrt(2 / (filter_size ** 2 * num_filters))))
         b = tf.get_variable("bias", [num_filters], initializer=tf.constant_initializer(0.1))
 
-        tf.summary.histogram("weights", W)
-        tf.summary.histogram("biases", b)
+        # tf.summary.histogram("weights", W)
+        # tf.summary.histogram("biases", b)
 
         conv = tf.nn.conv2d(input, filter=W, strides=[1, 1, 1, 1],
                             padding="SAME")
         conv = tf.nn.bias_add(conv, b)
-        tf.summary.histogram("pre_relu", conv)
+        # tf.summary.histogram("pre_relu", conv)
 
         print(conv.shape)
 
@@ -159,7 +159,7 @@ def conv2d(input, num_filters, filter_size, block_nos, last_flag=False):
             return conv
         else:
             conv = tf.nn.relu(conv + b)
-            tf.summary.histogram("activation", conv)
+            # tf.summary.histogram("activation", conv)
 
     return conv
 
@@ -226,32 +226,18 @@ def unweighted_cost(net_output, true_output, classes):
         return cost
 
 
-def sparse_unweighted_cost(net_output, true_output, classes):
-    with tf.variable_scope("sparse_unweighted_cost"):
-        pixelwise_output = tf.reshape(net_output, [-1, classes])
-        pixelwise_correct = tf.reshape(true_output, [-1])
-        # print(f"shape of pixelwise_output = {pixelwise_output.shape}")
-        # print(f"shape of pixelwise_correct = {pixelwise_correct.shape}")
-        cost = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-            logits=pixelwise_output, labels=pixelwise_correct))
-        # print(f"shape of cost1 = {cost.shape}")
-        return cost
-
-
-def sparse_weighted_cost1(net_output, true_output, weights, classes):
+def sparse_weighted_cost(net_output, true_output, weights, num_classes):
     with tf.variable_scope("sparse_weighted_cost1"):
-        pixelwise_output = tf.reshape(net_output, [-1, classes])
+        pixelwise_output = tf.reshape(net_output, [-1, num_classes])
         pixelwise_correct = tf.reshape(true_output, [-1])
 
         weighted = tf.gather(weights, pixelwise_correct)
         # print(f"shape of pixelwise_output = {pixelwise_output.shape}")
         # print(f"shape of pixelwise_correct = {pixelwise_correct.shape}")
-        cost = tf.reduce_mean(tf.divide(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(
-                logits=pixelwise_output, labels=pixelwise_correct),
-            weighted))
-        # print(f"shape of cost1 = {cost.shape}")
-        return cost
+        # print(weighted)
+        unweighted_cost = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=pixelwise_output, labels=pixelwise_correct)
+        cost = unweighted_cost/weighted
+        return tf.reduce_mean(unweighted_cost), tf.reduce_mean(cost)
 
 
 def weighted_cost(net_output, true_output, weights, classes):
@@ -263,10 +249,17 @@ def weighted_cost(net_output, true_output, weights, classes):
         return cost
 
 
-def sparse_weighted_cost2(net_output, true_output, weights, classes):
+def sparse_weighted_cost1(net_output, true_output, weights, classes):
     with tf.variable_scope("sparse_weighted_cost2"):
         softmaxed = tf.nn.softmax(net_output, axis=3)
         cost = sparse_cross_entropy(softmaxed, true_output, weights, classes)
         # print(f"shape of softmaxed = {softmaxed.shape}")
         # print(f"shape of cost2 = {cost.shape}")
         return cost
+
+
+def tf_get_mask(batch_size, H, W, prediction, num_classes):
+    colors = tf.random.uniform([num_classes, 3])
+    pred_mask = tf.argmax(prediction, axis=-1)
+    mask = tf.gather_nd(colors, tf.expand_dims(pred_mask, axis=-1))
+    return mask
