@@ -30,14 +30,21 @@ def save_image(name, image):
         plot.imsave(name, img, cmap='prism')
 
 
-def fetch_batch(batch_iter, batch_size, images_list, num_classes, num_channels, H=256, W=256):
+def fetch_batch(dataset, batch_iter, batch_size, images_list, num_classes, num_channels, H=256, W=256):
     ip_imgs = [];labels = [];names = []
     instances = np.zeros((num_classes))
 
     for idx in range(batch_iter*batch_size, (batch_iter+1)*batch_size):
-        img_name = images_list[idx]
+        if dataset == 'pascal':
+            img_name = images_list[idx]
+            img_path = join('./data/orig', f'{img_name}.jpg')
+            gt_labels_path = join('./data/labels', f'{img_name}.png')
+        elif dataset == 'carvana':
+            img_name = images_list[idx]
+            img_path = join('./Carvana/train', f'{img_name}.jpg')
+            gt_labels_path = join('./Carvana/train_masks', f'{img_name}_mask.gif')
 
-        gt_labels = np.array(Image.open(join('./data/labels', f'{img_name}.png')).resize((H, W), Image.NEAREST))
+        gt_labels = np.array(Image.open(gt_labels_path).resize((H, W), Image.NEAREST))
         for x in range(H):
             for y in range(W):
                 # To convert last channel to background/positive
@@ -47,10 +54,10 @@ def fetch_batch(batch_iter, batch_size, images_list, num_classes, num_channels, 
                 instances[gt_labels[x, y]] += 1
 
         if num_channels == 1:
-            img = np.array(Image.open(join('./data/orig', f'{img_name}.jpg')).convert('L').resize((H, W)))
+            img = np.array(Image.open(img_path).convert('L').resize((H, W)))
             img = np.expand_dims(img, axis=-1)
         else:
-            img = np.array(Image.open(join('./data/orig', f'{img_name}.jpg')).resize((H, W)))
+            img = np.array(Image.open(img_path).resize((H, W)))
 
         ip_imgs.append(img)
         labels.append(gt_labels)
