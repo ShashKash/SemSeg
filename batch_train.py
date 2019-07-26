@@ -3,25 +3,30 @@ import numpy as np
 import os
 from os.path import join, exists
 from time import time
-from functions import sparse_weighted_cost1, sparse_unweighted_cost, pixel_wise_softmax
+from functions import sparse_weighted_cost, pixel_wise_softmax, tf_get_mask
 from data_utils import save_image, fetch_batch
 from UNet import unet
 import json
 import pprint
 
 current_dir = os.getcwd()
-num_classes = 22
-learning_rate = 1e-3
+dataset = 'carvana'
+learning_rate = 1e-4
 epochs = 5
-batch_size = 8
+batch_size = 1
 num_channels = 1
 H = 256
 W = 256
 print_n = 10  # every print_n iters save summaries
 
-with open(join(current_dir, 'data/train.json')) as fp:
-    images_list = json.load(fp)
-fp.close()
+if dataset == 'pascal':
+    num_classes = 22
+    with open(join(current_dir, 'data/train.json')) as fp:
+        images_list = json.load(fp)
+    fp.close()
+elif dataset == 'carvana':
+    num_classes = 2
+    images_list = np.load('./Carvana/cars.npy')
 
 print(len(images_list))
 num_batches = len(images_list)//8 - 1
@@ -37,12 +42,15 @@ global_step = tf.Variable(0, "global_step")
 net_logits = unet(X, num_classes)
 
 # This prediction for each pixel are probabilities of it being in a class across the channels
-prediction = pixel_wise_softmax(net_logits)
+pred_probs = pixel_wise_softmax(net_logits)
 
-unweighted_loss = sparse_unweighted_cost(net_logits, sparse_label, num_classes)
-weighted_loss = sparse_weighted_cost1(net_logits, sparse_label, class_weights, num_classes)
-summ1 = tf.summary.scalar('unweighted_cost', unweighted_loss)
-summ2 = tf.summary.scalar('weighted_cost', weighted_loss)
+pred_mask = tf_get_mask(batch_size, H, W, pred_probs, num_classes)
+
+# unweighted_loss = sparse_unweighted_cost(net_logits, sparse_label, num_classes)
+unweighted_loss, weighted_loss = sparse_weighted_cost(net_logits, sparse_label, class_weights, num_classes)
+summ_unweighted = tf.summary.scalar('unweighted_cost', unweighted_loss)
+summ_weighted = tf.summary.scalar('weighted_cost', weighted_loss)
+summ_pred_mask = tf.summary.image('pred_mask', pred_mask)
 
 learning_rate_node = tf.train.exponential_decay(
     learning_rate=learning_rate,
@@ -59,7 +67,7 @@ summ = tf.summary.merge_all()
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
 
-    writer = tf.summary.FileWriter('/UNet/logs/model_graph/', sess.graph)
+    writer = tf.summary.FileWriter(join(current_dir, 'logs'), sess.graph)
     saver = tf.train.Saver()
 
     print([X.shape, sparse_label.shape, net_logits.shape])
@@ -74,11 +82,11 @@ with tf.Session() as sess:
         for bn in range(num_batches):
 
             # Load batch data using data_utils
-            x_train, y_train, c_weights, names = fetch_batch(bn, batch_size, images_list, num_classes, num_channels)
+            x_train, y_train, c_weights, names = fetch_batch(dataset, bn, batch_size, images_list, num_classes, num_channels)
             # Shape of x_train = (batch_size, H, W, num_channels)
-            print(x_train.shape)
+            # print(x_train.shape)
             # Shape of y_train = (batch_size, H, W)
-            print(y_train.shape)
+            # print(y_train.shape)
 
             # 0 Normalize the batch
             if batch_size != 1:
@@ -91,15 +99,17 @@ with tf.Session() as sess:
             #         # print(image.shape)
             #         save_image(image=image, name=f"image_batch1_{name_count}")
 
-            logits, image, _ = sess.run([net_logits, prediction, optimizer],
-                                        feed_dict={X: x_train,
-                                                   sparse_label: y_train,
-                                                   class_weights: c_weights})
+            logits, _ = sess.run([net_logits, optimizer],
+                                 feed_dict={X: x_train,
+                                            sparse_label: y_train,
+                                            class_weights: c_weights})
 
             if bn % print_n == 0:
-                summary = sess.run(summ, feed_dict={X: x_train,
+                loss, summary = sess.run([weighted_loss, summ],
+                                         feed_dict={X: x_train,
                                                     sparse_label: y_train,
                                                     class_weights: c_weights})
+                print(loss)
                 writer.add_summary(summary, counter)
 
             # if bn==0 and e%2==0:
@@ -109,7 +119,7 @@ with tf.Session() as sess:
             counter += 1
 
         end_time = time()
-        save_path = saver.save(sess, join(current_dir, "/checkpoints/model.ckpt"))
+        save_path = saver.save(sess, join(current_dir, "checkpoints/model.ckpt"))
         duration = end_time - start_time
         print(f"epoch no. {e} : done in {duration} sec")
 
